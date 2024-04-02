@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import os
 from PIL import Image
 import argparse
@@ -11,47 +13,59 @@ def parse_args():
     opts = parser.parse_args()
     return opts
 
+
+def file_path_to_xyz(file_path: str) -> Tuple[int, int, int]:
+        base = os.path.basename(file_path)
+        z, x, y = base.split('_')
+        y = os.path.splitext(y)[0]
+        return int(x), int(y), int(z)
+
+
 def main():
     opts = parse_args()
     search_path = os.path.join(opts.dir, '*_*_*.png')
     
-    filepaths = glob.glob(search_path)
+    # read file paths
+    file_paths = glob.glob(search_path)
+    if len(file_paths) == 0:
+        raise ValueError('No files found')
 
-    def xy(filepath):
-        base = os.path.basename(filepath)
-        z, x, y = filepath.split('_')
-        y = os.path.splitext(y)[0]
-        return int(x), int(y)
+    # get tile extents
+    xyzs = [
+        file_path_to_xyz(file_path)
+        for file_path in file_paths
+    ]
+    tile_extents = [
+        (min(positions), max(positions) + 1)  # extent of the bottom right tile
+        for positions in zip(*xyzs)
+    ]
 
-    yx = lambda filepath : xy(filepath)[::-1]
+    # compute output size
+    tile_width, tile_height = Image.open(file_paths[0]).size
+    out_width = (tile_extents[0][1] - tile_extents[0][0]) * tile_width
+    out_height = (tile_extents[1][1] - tile_extents[1][0]) * tile_height
 
-    filepaths = sorted(filepaths, key=xy)
-    
-    if len(filepaths) == 0:
-        print('No files found')
-        raise SystemExit
+    # create output image
+    out_img = Image.new('RGBA', (out_width, out_height), (0, 0, 255, 0))
+    for file_path, (x, y, z) in tqdm.tqdm(zip(file_paths, xyzs)):
+        # compute offset
+        x_pixel_offset = (x - tile_extents[0][0]) * tile_width
+        y_pixel_offset = (y - tile_extents[1][0]) * tile_height
 
-    tile_w, tile_h = Image.open(filepaths[0]).size
+        # paste tile
+        out_img.paste(
+            Image.open(file_path),
+            box=(
+                x_pixel_offset,
+                y_pixel_offset,
+                x_pixel_offset + tile_width,
+                y_pixel_offset + tile_height
+            )
+        )
 
-    xys = list(map(xy, filepaths))
-    x_0, y_0 = min(map(lambda x_y : x_y[0], xys)), min(map(lambda x_y: x_y[1], xys))
-    x_1, y_1 = max(map(lambda x_y : x_y[0], xys)), max(map(lambda x_y: x_y[1], xys))
-
-    n_x, n_y = x_1 - x_0, y_1 - y_0
-
-    out_w, out_h = n_x * tile_w, n_y * tile_h
-
-    print('output image size:', out_w, out_h, 'tile size:', tile_w, tile_h)
-
-    out_img = Image.new('RGBA', (out_w, out_h), (0, 0, 255, 0))
-    for filepath in tqdm.tqdm(filepaths):
-        x, y = xy(filepath)
-        x, y = x - x_0, y - y_0
-        tile = Image.open(filepath)
-        out_img.paste(tile, box=(x * tile_w, y * tile_h, (x + 1) * tile_w, (y + 1) * tile_h))
-
-    print('Saving')
+    print(f'Saving stitch to {opts.out_file}')
     out_img.save(opts.out_file)
+
 
 if __name__ == '__main__':
     main()
