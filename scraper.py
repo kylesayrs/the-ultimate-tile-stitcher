@@ -76,7 +76,7 @@ async def main():
             urls = []
             for x, y in tile_idxs_in_poly(poly, opts.zoom):
                 url = opts.url.format(z=opts.zoom, x=x, y=y)
-                with (await semaphore):
+                async with semaphore:
                     filepath = os.path.join(opts.out_dir, '{}_{}_{}.png'.format(opts.zoom, x, y))
                     if os.path.isfile(filepath):
                         continue
