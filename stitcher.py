@@ -1,10 +1,15 @@
 from typing import Tuple
 
 import os
-from PIL import Image
-import argparse
-import glob
 import tqdm
+import glob
+import numpy
+import argparse
+from PIL import Image
+from osgeo import gdal, gdalconst, osr
+
+from utils import tile2latlon
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='stitch tiles scraped by scraper.py')
@@ -22,10 +27,13 @@ def file_path_to_xyz(file_path: str) -> Tuple[int, int, int]:
 
 
 def main():
+    # arguments and  validation
     opts = parse_args()
-    search_path = os.path.join(opts.dir, '*_*_*.png')
+    if os.path.splitext(opts.out_file)[1].lower() != ".tif":
+        raise ValueError("output file must end with .tif")
     
     # read file paths
+    search_path = os.path.join(opts.dir, '*_*_*.png')
     file_paths = glob.glob(search_path)
     if len(file_paths) == 0:
         raise ValueError('No files found')
@@ -63,8 +71,33 @@ def main():
             )
         )
 
+    # create geotiff
+    out_image_array = numpy.array(out_img)
+
+    # Create a new GeoTIFF file
+    driver = gdal.GetDriverByName('GTiff')
+    dataset = driver.Create('output.tif', out_img.width, out_img.height, 3, gdal.GDT_Byte)
+
+    # Write the array data into the GeoTIFF dataset
+    for band_index in range(1, 4):
+        dataset.GetRasterBand(band_index).WriteArray(out_image_array[:, :, band_index - 1])
+
+    # Set geotransform
+    min_lat, min_lon = tile2latlon(tile_extents[0][0], tile_extents[1][0], 17)
+    max_lat, max_lon = tile2latlon(tile_extents[0][1], tile_extents[1][1], 17)
+    pixel_size = (
+        (max_lat - min_lat) / out_img.width,
+        (max_lon - min_lon) / out_img.height
+    )
+    geotransform = (min_lon, pixel_size[1], 0, min_lat, 0, pixel_size[0])
+    dataset.SetGeoTransform(geotransform)
+
+    # Set projection
+    srs = osr.SpatialReference()
+    srs.ImportFromEPSG(4326)
+    dataset.SetProjection(srs.ExportToWkt())
+
     print(f'Saving stitch to {opts.out_file}')
-    out_img.save(opts.out_file)
 
 
 if __name__ == '__main__':
