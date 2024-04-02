@@ -6,9 +6,11 @@ import glob
 import numpy
 import argparse
 from PIL import Image
-from osgeo import gdal, gdalconst, osr
+from osgeo import gdal, osr
 
 from utils import tile2latlon
+
+gdal.UseExceptions()
 
 
 def parse_args():
@@ -76,7 +78,7 @@ def main():
 
     # Create a new GeoTIFF file
     driver = gdal.GetDriverByName('GTiff')
-    dataset = driver.Create('output.tif', out_img.width, out_img.height, 3, gdal.GDT_Byte)
+    dataset = driver.Create(opts.out_file, out_img.width, out_img.height, 3, gdal.GDT_Byte)
 
     # Write the array data into the GeoTIFF dataset
     for band_index in range(1, 4):
@@ -86,10 +88,10 @@ def main():
     min_lat, min_lon = tile2latlon(tile_extents[0][0], tile_extents[1][0], 17)
     max_lat, max_lon = tile2latlon(tile_extents[0][1], tile_extents[1][1], 17)
     pixel_size = (
-        (max_lat - min_lat) / out_img.width,
-        (max_lon - min_lon) / out_img.height
+        (max_lon - min_lon) / out_img.height,
+        (max_lat - min_lat) / out_img.width
     )
-    geotransform = (min_lon, pixel_size[1], 0, min_lat, 0, pixel_size[0])
+    geotransform = (min_lon, pixel_size[0], 0.0, min_lat, 0.0, pixel_size[1])
     dataset.SetGeoTransform(geotransform)
 
     # Set projection
