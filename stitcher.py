@@ -85,11 +85,12 @@ def main():
         dataset.GetRasterBand(band_index).WriteArray(out_image_array[:, :, band_index - 1])
 
     # Set geotransform
-    min_lat, min_lon = tile2latlon(tile_extents[0][0], tile_extents[1][0], 17)
-    max_lat, max_lon = tile2latlon(tile_extents[0][1], tile_extents[1][1], 17)
+    tile_zoom = xyzs[0][2]
+    min_lat, min_lon = tile2latlon(tile_extents[0][0], tile_extents[1][0], tile_zoom)
+    max_lat, max_lon = tile2latlon(tile_extents[0][1], tile_extents[1][1], tile_zoom)
     pixel_size = (
-        (max_lon - min_lon) / out_img.height,
-        (max_lat - min_lat) / out_img.width
+        (max_lon - min_lon) / out_img.width,
+        (max_lat - min_lat) / out_img.height
     )
     geotransform = (min_lon, pixel_size[0], 0.0, min_lat, 0.0, pixel_size[1])
     dataset.SetGeoTransform(geotransform)
